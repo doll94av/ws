@@ -28,18 +28,19 @@ func submit(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	http.Redirect(w, r, "/Submit.html", 301)
-	//cmd := exec.Command(topimages.Body(), r.PostFormValue("reddit"))
-	topimages.Body(r.PostFormValue("reddit"))
-	//	if err := cmd.Run(); err != nil {
-	//	fmt.Println(err)
-	//}
+	savedImages = topimages.Body(r.PostFormValue("reddit"))
 
 }
 
 func download(w http.ResponseWriter, r *http.Request) {
 
-	files := []string{"images/0.jpg", "images/1.jpg", "images/2.jpg", "images/3.jpg", "images/4.jpg", "images/5.jpg", "images/6.jpg", "images/7.jpg", "images/8.jpg", "images/9.jpg"}
+	var files [20]string
+	files = savedImages
+
+	var test = strings.TrimSuffix(files[0], "\\")
+	fmt.Println(test + "GOTCHA")
 	output := "images.zip"
 
 	if err := ZipFiles(output, files); err != nil {
@@ -47,16 +48,18 @@ func download(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err2 := ioutil.ReadFile("images.zip")
 	if err2 != nil {
+
 		log.Fatal(err2)
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", "attachment; filename="+"images.zip")
+	w.Header().Set("Content-Disposition", "attachment; filename="+output)
+
 	http.ServeContent(w, r, "images.zip", time.Now(), bytes.NewReader(data))
 
 }
 
-func ZipFiles(filename string, files []string) error {
+func ZipFiles(filename string, files [20]string) error {
 
 	newZipFile, err := os.Create(filename)
 	if err != nil {
@@ -69,13 +72,23 @@ func ZipFiles(filename string, files []string) error {
 
 	// Add files to zip
 	for _, file := range files {
+
+		if file == "" {
+			break
+		}
 		if err = AddFileToZip(zipWriter, file); err != nil {
+			//broken here 4/5/19
 			return err
 		}
 	}
+	for _, element := range savedImages {
+		defer os.Remove(element)
+	}
+
 	return nil
 }
 
+//AddFileToZip does what it sounds like it does
 func AddFileToZip(zipWriter *zip.Writer, filename string) error {
 
 	fileToZip, err := os.Open(filename)
@@ -111,6 +124,8 @@ func AddFileToZip(zipWriter *zip.Writer, filename string) error {
 	return err
 }
 
+var savedImages [20]string
+
 func main() {
 	http.Handle("/", http.FileServer(http.Dir("./html")))
 	http.HandleFunc("/Submit", submit)
@@ -120,4 +135,5 @@ func main() {
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
+
 }

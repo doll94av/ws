@@ -12,15 +12,13 @@ package topimages
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/gocolly/colly"
-
 	//	"math/rand"
-	"strconv"
 )
 
 type item struct {
@@ -32,19 +30,21 @@ type item struct {
 	Title     string
 }
 
-func DownloadFile(url string) error {
+func DownloadFile(url string, dir string) error {
 
 	fmt.Println(url)
 	//random number as save file
 	//randomName := rand.Intn(1000)
-	randomName := count
-	var x = "images/" + strconv.Itoa(randomName) + ".jpg"
+	//randomName := count
+
+	x, err := ioutil.TempFile(dir, "reddit.*.jpg")
 	//create file
-	out, err := os.Create(x)
+	//out, err := os.Create(x)
+
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	//defer out.Close()
 
 	//get data
 	resp, err := http.Get(url)
@@ -54,11 +54,13 @@ func DownloadFile(url string) error {
 	defer resp.Body.Close()
 
 	//write data
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(x, resp.Body)
 	if err != nil {
 		return err
 	}
 	//imageTE.AppendText(walk.NewIconFromImage(x))
+
+	savedImages[count] = x.Name()
 	return nil
 
 }
@@ -67,8 +69,12 @@ func DownloadFile(url string) error {
 //where we've been to avoid duplicates
 var count = 0
 var visitedUrl map[string]bool
+var savedImages [20]string
+var savedDir string
 
-func Body(redditInput string) {
+var dir string
+
+func Body(redditInput string) [20]string {
 
 	//initalize map
 	visitedUrl = make(map[string]bool)
@@ -77,7 +83,7 @@ func Body(redditInput string) {
 	outputDir := "/images"
 	c := colly.NewCollector(
 		colly.AllowedDomains("old.reddit.com"),
-		colly.UserAgent("Chrome:com.learngo.top10download:v1 (by /u/myHoneyBaked)"),
+		colly.UserAgent("Chrome:com.learngo.top10download:v3 (by /u/myHoneyBaked)"),
 		colly.Async(true),
 	)
 
@@ -118,9 +124,13 @@ func Body(redditInput string) {
 		t := i.ChildAttr("a", "href")
 
 		if strings.Contains(t, ".jpg") {
+
 			if count < 10 {
+				if count >= 10 {
+					return
+				}
 				if _, exists := visitedUrl[t]; !exists {
-					err := DownloadFile(t)
+					err := DownloadFile(t, dir)
 					visitedUrl[t] = true
 					count++
 					if err != nil {
@@ -131,6 +141,9 @@ func Body(redditInput string) {
 			}
 		}
 	})
+	dir, _ = ioutil.TempDir("images", "downloaded")
 	c.Visit(redditInput)
 	c.Wait()
+
+	return savedImages
 }
